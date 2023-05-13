@@ -40,21 +40,6 @@ class Resnet(nn.Module):
         out = out.reshape(b,f,-1)
         return out
 
-class Lstm(nn.Module):
-    def __init__(self,in_dim,hid_dim,n_layers=1):
-        super(Lstm,self).__init__()
-        self.in_dim = in_dim
-        self.hid_dim = hid_dim
-        self.n_layers = n_layers
-        self.lstm = nn.LSTM(in_dim,hid_dim,
-                            num_layers = n_layers,
-                            batch_first = True)
-
-    def forward(self,x):
-        out, (h_n, c_n) = self.lstm(x)
-        hidden = h_n[-1]
-        return hidden
-
 class Lstm_vid(nn.Module):
     def __init__(self,in_dim,hid_dim,n_layers=1):
         super(Lstm_vid,self).__init__()
@@ -69,27 +54,6 @@ class Lstm_vid(nn.Module):
         hidden = h_n[-1]
         return out,hidden
 
-class Atten_vid(nn.Module):
-    def __init__(self,emb_dim,n_head=2):
-        super(Atten_vid,self).__init__()
-        self.emb_dim = emb_dim
-        self.n_head = n_head
-        self.atten = nn.MultiheadAttention(embed_dim = self.emb_dim,
-                                            num_heads = self.n_head,
-                                            batch_first = True)   #B,L,E
-        self.fc = nn.Linear(3*emb_dim,emb_dim)
-    def forward(self,x):
-        out,_ = self.atten(x,x,x)
-        out_mean = out.mean(dim = 1)
-        out_min,_ = out.min(dim = 1, keepdim = True)
-        out_min = out_min.squeeze(1)
-        out_max,_ = out.max(dim = 1, keepdim = True)
-        out_max = out_max.squeeze(1)
-        out_combined = torch.cat((out_mean,out_min),1)
-        out_combined = torch.cat((out_combined,out_max),1)
-        out_final = self.fc(out_combined)
-        return out_final
-
 class Bert(nn.Module):
     def __init__(self):
         super(Bert, self).__init__()
@@ -101,38 +65,6 @@ class Bert(nn.Module):
         pooled_output = outputs['pooler_output']
         #pooled_output = self.fc(pooled_output)
         return pooled_output
-
-
-class Model(nn.Module):
-    def __init__(self,resnet,lstm,bert,vocab_dim,out_dim):
-        super(Model,self).__init__()
-        self.lstm = lstm
-        self.resnet = resnet
-        self.bert = bert
-        self.vid_quest_fc = nn.Linear(2*out_dim,out_dim)
-        self.fc1_des = nn.Linear(out_dim,100)
-        self.fc2_des = nn.Linear(100,vocab_dim)
-        self.fc1_ndes = nn.Linear(out_dim,4)
-        self.fc2_ndes = nn.Linear(100,4)
-        self.dropout = nn.Dropout(0.2)
-
-    def forward(self,vid,question,quest_type):
-        resnet_out = self.resnet(vid)
-        vid_emb = self.lstm(resnet_out)
-        quest_emb = self.bert(question)
-        vq_emb = torch.cat((vid_emb,quest_emb),1)
-        vq_emb = self.vid_quest_fc(vq_emb)
-        vq_emb = self.dropout(vq_emb)
-        mask1 = [s == "descriptive" for s in quest_type]
-        mask2 = [s != "descriptive" for s in quest_type]
-        vq_emb_des = vq_emb[mask1]
-        vq_emb_ndes = vq_emb[mask2]
-        vq_des = self.fc1_des(vq_emb_des)
-        vq_des = self.dropout(vq_des)
-        out_des = self.fc2_des(vq_des)
-        out_ndes = self.fc1_ndes(vq_emb_ndes)
-        #out_ndes = self.fc2_ndes(vq_ndes)
-        return out_des , out_ndes
 
 class Model_Desc(nn.Module):
     def __init__(self,resnet,lstm,bert,vocab_dim,out_dim):
@@ -159,34 +91,6 @@ class Model_Desc(nn.Module):
         out_des = self.fc2_des(vq_des)
         return out_des 
 
-
-class Model_NDesc_choice_mask(nn.Module):
-    def __init__(self,resnet,lstm,bert,vocab_dim,out_dim):
-        super(Model_NDesc_choice_mask,self).__init__()
-        self.lstm = lstm
-        self.resnet = resnet
-        self.bert = bert
-        self.vid_quest_fc = nn.Linear(2*out_dim,out_dim)
-        self.fc1_ndes = nn.Linear(out_dim,100)
-        self.fc2_ndes = nn.Linear(100,4)
-        self.dropout3 = nn.Dropout(0.2)
-        self.sig = nn.Sigmoid()
-
-    def forward(self,vid,question,quest_type):
-        resnet_out = self.resnet(vid)
-        vid_emb = self.lstm(resnet_out)
-        quest_emb = self.bert(question)
-        vq_emb = torch.cat((vid_emb,quest_emb),1)
-        vq_emb = self.vid_quest_fc(vq_emb)
-        #vq_emb = self.dropout3(vq_emb)
-        mask2 = [s != "descriptive" for s in quest_type]
-        vq_emb_ndes = vq_emb[mask2]
-        vq_ndes = self.fc1_ndes(vq_emb_ndes)
-        vq_ndes = self.dropout3(vq_ndes)
-        out_ndes = self.fc2_ndes(vq_ndes)
-        out_ndes = self.sig(out_ndes)
-        return out_ndes
-
 class Model_NDesc2(nn.Module):
     def __init__(self,resnet,lstm,bert,vocab_dim,out_dim):
         super(Model_NDesc2,self).__init__()
@@ -202,33 +106,6 @@ class Model_NDesc2(nn.Module):
     def forward(self,vid,question,quest_type):
         resnet_out = self.resnet(vid)
         _,vid_emb = self.lstm(resnet_out)
-        quest_emb = self.bert(question)
-        vq_emb = torch.cat((vid_emb,quest_emb),1)
-        vq_emb = self.vid_quest_fc(vq_emb)
-        vq_emb = self.dropout3(vq_emb)
-        mask2 = [s != "descriptive" for s in quest_type]
-        vq_emb_ndes = vq_emb[mask2]
-        vq_ndes = self.fc1_ndes(vq_emb_ndes)
-        vq_ndes = self.dropout3(vq_ndes)
-        out_ndes = self.fc2_ndes(vq_ndes)
-        out_ndes = self.sig(out_ndes)
-        return out_ndes
-
-class Model_NDesc_Atten(nn.Module):
-    def __init__(self,resnet,atten,bert,vocab_dim,out_dim):
-        super(Model_NDesc_Atten,self).__init__()
-        self.atten = atten
-        self.resnet = resnet
-        self.bert = bert
-        self.vid_quest_fc = nn.Linear(2*out_dim,out_dim)
-        self.fc1_ndes = nn.Linear(out_dim,100)
-        self.fc2_ndes = nn.Linear(100,4)
-        self.dropout3 = nn.Dropout(0.2)
-        self.sig = nn.Sigmoid()
-
-    def forward(self,vid,question,quest_type):
-        resnet_out = self.resnet(vid)
-        vid_emb = self.atten(resnet_out)
         quest_emb = self.bert(question)
         vq_emb = torch.cat((vid_emb,quest_emb),1)
         vq_emb = self.vid_quest_fc(vq_emb)
