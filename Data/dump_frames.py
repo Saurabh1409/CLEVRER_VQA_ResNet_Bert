@@ -7,14 +7,13 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_path',type = str)
     parser.add_argument('--output_path',type = str)
+    parser.add_argument('--size',type = int)
     args = parser.parse_args() 
-
-
-#input_folder = "/scratch/cse/dual/cs5180404/col775/A2/data/train/video" # path to the folder containing the videos
-#output_folder = "/home/cse/msr/csy227518/scratch/COL775/Assignment_2/Dataloader/frames/" # path to the folder where the frames will be saved
+    
     input_folder = args.input_path
     output_folder = args.output_path
     video_extensions = [".mp4", ".avi"] 
+    size = args.size
     frame_interval_ms = 200 
 
     for filename in os.listdir(input_folder):
@@ -35,7 +34,7 @@ if __name__=='__main__':
                     ret, frame = cap.read()
                     if not ret:
                         break
-                    frame = cv2.resize(frame,(128,128))
+                    frame = cv2.resize(frame,(size,size))
                     if frame_count % frame_interval == 0:
                         frame_filename = f"{count_num}.jpg"
                         output_dir = output_folder+"/"+f"{os.path.splitext(video)[0]}"
